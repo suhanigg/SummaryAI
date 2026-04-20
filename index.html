@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎧 Audio to Notes AI</title>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 40px; text-align: center; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .content { padding: 40px; }
+        .upload-area { border: 3px dashed #667eea; border-radius: 15px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s; margin-bottom: 30px; }
+        .upload-area:hover { background: #f8f9ff; border-color: #5a67d8; }
+        .upload-area.dragover { background: #e6f3ff; border-color: #4299e1; }
+        .file-info { background: #f7fafc; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        .progress { background: #e2e8f0; height: 8px; border-radius: 10px; overflow: hidden; margin: 20px 0; }
+        .progress-bar { background: linear-gradient(90deg, #48bb78, #38a169); height: 100%; width: 0%; transition: width 0.3s; }
+        .result-box { background: #f7fafc; border-radius: 10px; padding: 20px; margin: 20px 0; min-height: 200px; }
+        .btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 5px; transition: transform 0.2s; }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .status { padding: 15px; border-radius: 8px; margin: 15px 0; font-weight: bold; }
+        .status.success { background: #c6f6d5; color: #22543d; border-left: 4px solid #38a169; }
+        .status.error { background: #fed7d7; color: #742a2a; border-left: 4px solid #e53e3e; }
+        .status.info { background: #bee3f8; color: #2c5282; border-left: 4px solid #3182ce; }
+        @media (max-width: 768px) { .content { padding: 20px; } .header h1 { font-size: 2em; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎧 Audio to Notes AI</h1>
+            <p>Upload MP4/WAV → Instant Transcription → Smart Notes</p>
+        </div>
+        
+        <div class="content">
+            <div id="uploadArea" class="upload-area">
+                <div style="font-size: 4em; margin-bottom: 20px;">📤</div>
+                <h3>Click or drag MP4, WAV, MP3, M4A</h3>
+                <p>Max 5min recommended • Works in browser</p>
+            </div>
+            
+            <div id="fileInfo" class="file-info" style="display: none;">
+                <h4 id="fileName"></h4>
+                <p id="fileSize"></p>
+            </div>
+            
+            <div id="controls" style="display: none;">
+                <label>
+                    <input type="checkbox" id="summarize" checked> ✍️ Generate Notes
+                </label>
+                <div class="progress">
+                    <div id="progressBar" class="progress-bar"></div>
+                </div>
+                <div id="status"></div>
+            </div>
+            
+            <div id="transcription" class="result-box" style="display: none;">
+                <h3>📜 Transcription</h3>
+                <div id="transcriptionText"></div>
+                <button class="btn" onclick="download('transcription.txt', transcriptionText.innerText)">⬇️ Download TXT</button>
+                <button class="btn" onclick="copyToClipboard(transcriptionText.innerText)">📋 Copy</button>
+            </div>
+            
+            <div id="summary" class="result-box" style="display: none;">
+                <h3>✍️ Smart Notes</h3>
+                <div id="summaryText"></div>
+                <button class="btn" onclick="download('notes.txt', summaryText.innerText)">⬇️ Download Notes</button>
+                <button class="btn" onclick="copyToClipboard(summaryText.innerText)">📋 Copy</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let audioBuffer = null;
+        let transcription = '';
+        
+        // 🧠 Transformers.js setup
+        const { pipeline, env } = Transformers;
+        env.allowLocalModels = false;
+        env.allowRemoteModels = true;
+        
+        // FFmpeg setup
+        const { FFmpeg } = FFmpegWASM;
+        const ffmpeg = new FFmpeg();
+        
+        // UI Elements
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInfo = document.getElementById('fileInfo');
+        const controls = document.getElementById('controls');
+        const progressBar = document.getElementById('progressBar');
+        const status = document.getElementById('status');
+        const transcriptionDiv = document.getElementById('transcription');
+        const summaryDiv = document.getElementById('summary');
+        
+        // Drag & Drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) await processFile(file);
+        });
+        
+        uploadArea.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'audio/*,video/mp4';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) processFile(file);
+            };
+            input.click();
+        });
+        
+        // Main processing
+        async function processFile(file) {
+            if (file.size > 50 * 1024 * 1024) {
+                showStatus('❌ File too large (max 50MB)', 'error');
+                return;
+            }
+            
+            // Show file info
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+            fileInfo.style.display = 'block';
+            controls.style.display = 'block';
+            uploadArea.style.display = 'none';
+            
+            updateProgress(10, 'Loading FFmpeg...');
+            await ffmpeg.load();
+            
+            updateProgress(20, 'Converting to WAV...');
+            audioBuffer = await convertToWav(file);
+            
+            updateProgress(40, 'Loading AI model...');
+            const transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
+            
+            updateProgress(60, '🎙️ Transcribing...');
+            const result = await transcriber(audioBuffer, {
+                chunk_length_s: 30,
+                stride_length_s: 5,
+            });
+            transcription = result.text;
+            
+            // Show transcription
+            document.getElementById('transcriptionText').textContent = transcription;
+            transcriptionDiv.style.display = 'block';
+            updateProgress(90, '✅ Transcription complete!');
+            
+            // Generate summary if checked
+            if (document.getElementById('summarize').checked && transcription.length > 50) {
+                await generateSummary();
+            }
+            
+            updateProgress(100, '🎉 All done!');
+        }
+        
+        // Convert any audio to WAV
+        async function convertToWav(file) {
+            const inputName = 'input.' + file.name.split('.').pop();
+            await ffmpeg.writeFile(inputName, new Uint8Array(await file.arrayBuffer()));
+            
+            await ffmpeg.exec(['-i', inputName, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', 'output.wav']);
+            const data = await ffmpeg.readFile('output.wav');
+            
+            // Cleanup
+            await ffmpeg.deleteFile(inputName);
+            await ffmpeg.deleteFile('output.wav');
+            
+            return data;
+        }
+        
+        // Generate summary
+        async function generateSummary() {
+            updateProgress(95, '✍️ Generating notes...');
+            
+            const summarizer = await pipeline('summarization', 'Xenova/distilbart-cnn-12-6');
+            
+            // Chunk if too long
+            const chunks = transcription.match(/.{1,900}/g) || [transcription];
+            let summary = '';
+            
+            for (let chunk of chunks) {
+                const result = await summarizer(chunk, { max_new_tokens: 120 });
+                summary += result[0].summary_text + ' ';
+            }
+            
+            document.getElementById('summaryText').textContent = summary.trim();
+            summaryDiv.style.display = 'block';
+        }
+        
+        // UI Helpers
+        function updateProgress(percent, message) {
+            progressBar.style.width = percent + '%';
+            status.textContent = message;
+            status.className = 'status info';
+        }
+        
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        function download(filename, text) {
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showStatus('✅ Copied to clipboard!', 'success');
+            });
+        }
+    </script>
+</body>
+</html>
