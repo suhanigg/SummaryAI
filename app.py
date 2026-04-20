@@ -56,7 +56,7 @@ if uploaded_file and hf_token:
             use_auth_token=hf_token
         )
 
-        result = speech_to_text(audio_path)
+        result = speech_to_text(audio_path, chunk_length_s=30)
         transcription = result["text"]
 
         # Show transcription
