@@ -342,3 +342,48 @@
         
         function copyText(elementId) {
             const text = document.getElementById(elementId).value;
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                showStatus('✅ Copied to clipboard!', 'success');
+            }).catch(() => {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showStatus('✅ Copied!', 'success');
+            });
+        }
+        
+        function speakText(elementId) {
+            const text = document.getElementById(elementId).value;
+            if ('speechSynthesis' in window && text) {
+                speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
+                speechSynthesis.speak(utterance);
+                showStatus('🔊 Speaking...', 'info');
+            } else {
+                showStatus('❌ Speech not supported', 'error');
+            }
+        }
+        
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('statusMsg');
+            if (statusEl) {
+                statusEl.textContent = message;
+                statusEl.className = `status ${type}`;
+            }
+        }
+        
+        // 🚀 Initialize - ALL ERRORS FIXED
+        const app = new AudioToNotes();
+    </script>
+</body>
+</html>
