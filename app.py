@@ -7,7 +7,7 @@ from transformers import pipeline
 # =========================
 # 🔐 HARDCODE TOKEN
 # =========================
-hf_token = "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"
+hf_token = "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"
 
 
 # =========================
