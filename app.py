@@ -4,60 +4,76 @@ import os
 import ffmpeg
 from transformers import pipeline
 
-# Page config
+# =========================
+# 🔐 HARDCODE TOKEN HERE
+# =========================
+hf_token = "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"
+
+
+# =========================
+# 🎨 UI CONFIG
+# =========================
 st.set_page_config(
     page_title="Audio → Notes AI",
     page_icon="🎧",
     layout="wide"
 )
 
-# Title
-st.title("🎧 Audio to Notes AI App")
-st.markdown("Upload MP4 or WAV → Convert speech to text → Generate notes")
+st.title("🎧 Audio to Notes AI")
+st.markdown("Upload **MP4 or WAV** → Convert to text → Generate notes")
 
 # Sidebar
-st.sidebar.header("⚙️ Settings")
-hf_token = st.sidebar.text_input("Hugging Face Token", type="password")
-summarize = st.sidebar.checkbox("Enable Notes Summary", value=True)
+st.sidebar.header("⚙️ Options")
+summarize = st.sidebar.checkbox("Generate Notes Summary", value=True)
 
-# File upload (UPDATED)
-uploaded_file = st.file_uploader("📤 Upload Audio/Video File", type=["mp4", "wav"])
+# File upload
+uploaded_file = st.file_uploader("📤 Upload File", type=["mp4", "wav"])
 
-if uploaded_file and hf_token:
+
+# =========================
+# 🚀 MAIN LOGIC
+# =========================
+if uploaded_file:
 
     st.success("File uploaded successfully ✅")
 
     with st.spinner("🔄 Processing... Please wait"):
 
-        file_ext = uploaded_file.name.split(".")[-1]
+        file_ext = uploaded_file.name.split(".")[-1].lower()
 
-        # Save uploaded file
+        # Save file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_ext}") as temp_file:
             temp_file.write(uploaded_file.read())
             input_path = temp_file.name
 
-        # If MP4 → convert to WAV
+        # Convert MP4 → WAV
         if file_ext == "mp4":
             audio_path = input_path.replace(".mp4", ".wav")
             try:
                 ffmpeg.input(input_path).output(audio_path).run(overwrite_output=True, quiet=True)
-            except:
-                st.error("❌ FFmpeg error. Make sure it's installed.")
+            except Exception as e:
+                st.error("❌ FFmpeg error. Make sure packages.txt has ffmpeg.")
                 st.stop()
         else:
-            # If already WAV → no conversion
             audio_path = input_path
 
-        # Transcription
+        # =========================
+        # 🎙️ SPEECH TO TEXT
+        # =========================
         st.info("🧠 Transcribing audio...")
+
         speech_to_text = pipeline(
             "automatic-speech-recognition",
             model="openai/whisper-base",
             use_auth_token=hf_token
         )
 
-        result = speech_to_text(audio_path, chunk_length_s=30)
-        transcription = result["text"]
+        try:
+            result = speech_to_text(audio_path, chunk_length_s=30)
+            transcription = result["text"]
+        except Exception as e:
+            st.error(f"❌ Transcription failed: {e}")
+            st.stop()
 
         # Show transcription
         st.subheader("📜 Transcription")
@@ -69,7 +85,9 @@ if uploaded_file and hf_token:
             file_name="transcription.txt"
         )
 
-        # Summarization
+        # =========================
+        # 📝 SUMMARIZATION
+        # =========================
         if summarize:
             st.info("✍️ Generating notes...")
 
@@ -79,28 +97,34 @@ if uploaded_file and hf_token:
                 use_auth_token=hf_token
             )
 
-            summary = summarizer(
-                transcription,
-                max_length=180,
-                min_length=60,
-                do_sample=False
-            )
+            try:
+                summary = summarizer(
+                    transcription,
+                    max_length=180,
+                    min_length=60,
+                    do_sample=False
+                )
 
-            summary_text = summary[0]["summary_text"]
+                summary_text = summary[0]["summary_text"]
 
-            st.subheader("📝 Notes Summary")
-            st.text_area("", summary_text, height=200)
+                st.subheader("📝 Notes Summary")
+                st.text_area("", summary_text, height=200)
 
-            st.download_button(
-                "⬇️ Download Notes",
-                summary_text,
-                file_name="notes.txt"
-            )
+                st.download_button(
+                    "⬇️ Download Notes",
+                    summary_text,
+                    file_name="notes.txt"
+                )
 
-        # Cleanup
+            except Exception as e:
+                st.error(f"❌ Summarization failed: {e}")
+
+        # =========================
+        # 🧹 CLEANUP
+        # =========================
         os.remove(input_path)
         if file_ext == "mp4":
             os.remove(audio_path)
 
 else:
-    st.warning("⚠️ Upload a file and enter Hugging Face token to begin.")
+    st.warning("⚠️ Please upload an MP4 or WAV file to begin.")
