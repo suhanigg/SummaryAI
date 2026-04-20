@@ -203,7 +203,7 @@ streamlit run app.py
             }
 
             async handleFile(file) {
-                if (!file || file.size > 200e6) return this.error('File too large (max 200MB)');
+                if (!file || file.size > 30e6) return this.error('File too large (max 30MB)');
 
                 document.getElementById('fileName').textContent = file.name;
                 document.getElementById('fileSize').textContent = (file.size/1e6).toFixed(1) + ' MB';
