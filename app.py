@@ -5,7 +5,7 @@ import ffmpeg
 from transformers import pipeline
 
 # =========================
-# 🔐 HARDCODE TOKEN HERE
+# 🔐 HARDCODE TOKEN
 # =========================
 hf_token = "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"
 
@@ -65,11 +65,12 @@ if uploaded_file:
         speech_to_text = pipeline(
             "automatic-speech-recognition",
             model="openai/whisper-base",
-            use_auth_token=hf_token
+            token=hf_token,
+            device=-1   # force CPU for Streamlit Cloud
         )
 
         try:
-            result = speech_to_text(audio_path, chunk_length_s=30)
+            result = speech_to_text(audio_path)
             transcription = result["text"]
         except Exception as e:
             st.error(f"❌ Transcription failed: {e}")
@@ -94,7 +95,8 @@ if uploaded_file:
             summarizer = pipeline(
                 "summarization",
                 model="facebook/bart-large-cnn",
-                use_auth_token=hf_token
+                token=hf_token,
+                device=-1
             )
 
             try:
