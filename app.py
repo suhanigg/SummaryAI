@@ -13,39 +13,42 @@ st.set_page_config(
 
 # Title
 st.title("🎧 Audio to Notes AI App")
-st.markdown("Upload an MP4 file → Convert speech to text → Generate notes")
+st.markdown("Upload MP4 or WAV → Convert speech to text → Generate notes")
 
 # Sidebar
 st.sidebar.header("⚙️ Settings")
 hf_token = st.sidebar.text_input("Hugging Face Token", type="password")
-
 summarize = st.sidebar.checkbox("Enable Notes Summary", value=True)
 
-# File upload
-uploaded_file = st.file_uploader("📤 Upload MP4 File", type=["mp4"])
+# File upload (UPDATED)
+uploaded_file = st.file_uploader("📤 Upload Audio/Video File", type=["mp4", "wav"])
 
-# Main logic
 if uploaded_file and hf_token:
 
     st.success("File uploaded successfully ✅")
 
     with st.spinner("🔄 Processing... Please wait"):
 
-        # Save temp video
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video:
-            temp_video.write(uploaded_file.read())
-            video_path = temp_video.name
+        file_ext = uploaded_file.name.split(".")[-1]
 
-        # Convert to WAV
-        audio_path = video_path.replace(".mp4", ".wav")
+        # Save uploaded file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_ext}") as temp_file:
+            temp_file.write(uploaded_file.read())
+            input_path = temp_file.name
 
-        try:
-            ffmpeg.input(video_path).output(audio_path).run(overwrite_output=True, quiet=True)
-        except:
-            st.error("❌ FFmpeg not found. Install FFmpeg and add to PATH.")
-            st.stop()
+        # If MP4 → convert to WAV
+        if file_ext == "mp4":
+            audio_path = input_path.replace(".mp4", ".wav")
+            try:
+                ffmpeg.input(input_path).output(audio_path).run(overwrite_output=True, quiet=True)
+            except:
+                st.error("❌ FFmpeg error. Make sure it's installed.")
+                st.stop()
+        else:
+            # If already WAV → no conversion
+            audio_path = input_path
 
-        # Load Whisper model
+        # Transcription
         st.info("🧠 Transcribing audio...")
         speech_to_text = pipeline(
             "automatic-speech-recognition",
@@ -56,11 +59,10 @@ if uploaded_file and hf_token:
         result = speech_to_text(audio_path)
         transcription = result["text"]
 
-        # Display transcription
+        # Show transcription
         st.subheader("📜 Transcription")
         st.text_area("", transcription, height=250)
 
-        # Download transcription
         st.download_button(
             "⬇️ Download Transcription",
             transcription,
@@ -89,7 +91,6 @@ if uploaded_file and hf_token:
             st.subheader("📝 Notes Summary")
             st.text_area("", summary_text, height=200)
 
-            # Download summary
             st.download_button(
                 "⬇️ Download Notes",
                 summary_text,
@@ -97,8 +98,9 @@ if uploaded_file and hf_token:
             )
 
         # Cleanup
-        os.remove(video_path)
-        os.remove(audio_path)
+        os.remove(input_path)
+        if file_ext == "mp4":
+            os.remove(audio_path)
 
 else:
     st.warning("⚠️ Upload a file and enter Hugging Face token to begin.")
