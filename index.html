@@ -4,235 +4,346 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🎧 Audio to Notes AI</title>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh; padding: 20px;
+            min-height: 100vh; padding: 20px; color: #333;
         }
-        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); overflow: hidden; }
-        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 40px; text-align: center; }
-        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .container { 
+            max-width: 900px; margin: 0 auto; 
+            background: white; border-radius: 20px; 
+            box-shadow: 0 25px 50px rgba(0,0,0,0.15); 
+            overflow: hidden;
+        }
+        .header { 
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+            color: white; padding: 40px; text-align: center; 
+        }
+        .header h1 { font-size: 2.8em; margin-bottom: 10px; }
         .content { padding: 40px; }
-        .upload-area { border: 3px dashed #667eea; border-radius: 15px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s; margin-bottom: 30px; }
-        .upload-area:hover { background: #f8f9ff; border-color: #5a67d8; }
-        .upload-area.dragover { background: #e6f3ff; border-color: #4299e1; }
-        .file-info { background: #f7fafc; padding: 20px; border-radius: 10px; margin: 20px 0; }
-        .progress { background: #e2e8f0; height: 8px; border-radius: 10px; overflow: hidden; margin: 20px 0; }
-        .progress-bar { background: linear-gradient(90deg, #48bb78, #38a169); height: 100%; width: 0%; transition: width 0.3s; }
-        .result-box { background: #f7fafc; border-radius: 10px; padding: 20px; margin: 20px 0; min-height: 200px; }
-        .btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 5px; transition: transform 0.2s; }
-        .btn:hover { transform: translateY(-2px); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .status { padding: 15px; border-radius: 8px; margin: 15px 0; font-weight: bold; }
-        .status.success { background: #c6f6d5; color: #22543d; border-left: 4px solid #38a169; }
-        .status.error { background: #fed7d7; color: #742a2a; border-left: 4px solid #e53e3e; }
-        .status.info { background: #bee3f8; color: #2c5282; border-left: 4px solid #3182ce; }
-        @media (max-width: 768px) { .content { padding: 20px; } .header h1 { font-size: 2em; } }
+        .upload-area { 
+            border: 4px dashed #667eea; border-radius: 20px; 
+            padding: 60px 20px; text-align: center; cursor: pointer; 
+            transition: all 0.3s; margin-bottom: 30px; 
+            background: #f8faff;
+        }
+        .upload-area:hover { border-color: #5a67d8; background: #f0f4ff; transform: scale(1.02); }
+        .upload-area.dragover { border-color: #4299e1; background: #e6f3ff; }
+        .file-info { background: #f0fff4; padding: 25px; border-radius: 15px; margin: 25px 0; border-left: 5px solid #48bb78; }
+        .progress-container { background: #e2e8f0; height: 12px; border-radius: 10px; overflow: hidden; margin: 25px 0; }
+        .progress-bar { background: linear-gradient(90deg, #48bb78, #38a169, #2f855a); height: 100%; width: 0%; transition: width 0.4s ease; }
+        .result-box { 
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); 
+            border-radius: 15px; padding: 30px; margin: 30px 0; 
+            border-left: 6px solid #4299e1; min-height: 180px;
+        }
+        .btn { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; border: none; padding: 15px 30px; 
+            border-radius: 12px; cursor: pointer; font-size: 16px; 
+            font-weight: 600; margin: 10px 5px; transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6); }
+        .btn:active { transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .status { padding: 20px; border-radius: 12px; margin: 20px 0; font-weight: 600; font-size: 16px; }
+        .status.success { background: #c6f6d5; color: #22543d; border-left: 6px solid #38a169; }
+        .status.error { background: #fed7d7; color: #742a2a; border-left: 6px solid #e53e3e; }
+        .status.info { background: #bee3f8; color: #2c5282; border-left: 6px solid #3182ce; }
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 30px 0; }
+        .metric { text-align: center; padding: 20px; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+        .metric-value { font-size: 2.5em; font-weight: bold; color: #2f855a; }
+        .hidden { display: none !important; }
+        @media (max-width: 768px) { 
+            .content { padding: 25px 20px; } 
+            .header h1 { font-size: 2em; }
+            .btn { padding: 12px 20px; font-size: 14px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🎧 Audio to Notes AI</h1>
-            <p>Upload MP4/WAV → Instant Transcription → Smart Notes</p>
+            <p><strong>Upload → Transcribe → Notes</strong> • 100% Browser • No Server</p>
         </div>
         
         <div class="content">
+            <!-- Upload Area -->
             <div id="uploadArea" class="upload-area">
-                <div style="font-size: 4em; margin-bottom: 20px;">📤</div>
-                <h3>Click or drag MP4, WAV, MP3, M4A</h3>
-                <p>Max 5min recommended • Works in browser</p>
+                <div style="font-size: 5em; margin-bottom: 20px; opacity: 0.8;">📤</div>
+                <h2>Drop audio/video file here</h2>
+                <p>or <strong>click</strong> • MP4, WAV, MP3, M4A • Max 30MB</p>
             </div>
             
-            <div id="fileInfo" class="file-info" style="display: none;">
-                <h4 id="fileName"></h4>
+            <!-- File Info -->
+            <div id="fileInfo" class="file-info hidden">
+                <h3 id="fileName"></h3>
                 <p id="fileSize"></p>
+                <label><input type="checkbox" id="makeSummary" checked style="margin-right: 10px; transform: scale(1.5);"> ✍️ Generate smart notes</label>
             </div>
             
-            <div id="controls" style="display: none;">
-                <label>
-                    <input type="checkbox" id="summarize" checked> ✍️ Generate Notes
-                </label>
-                <div class="progress">
+            <!-- Progress -->
+            <div id="progressSection" class="hidden">
+                <div class="progress-container">
                     <div id="progressBar" class="progress-bar"></div>
                 </div>
-                <div id="status"></div>
+                <div id="statusMsg" class="status info">Ready to process...</div>
             </div>
             
-            <div id="transcription" class="result-box" style="display: none;">
-                <h3>📜 Transcription</h3>
-                <div id="transcriptionText"></div>
-                <button class="btn" onclick="download('transcription.txt', transcriptionText.innerText)">⬇️ Download TXT</button>
-                <button class="btn" onclick="copyToClipboard(transcriptionText.innerText)">📋 Copy</button>
+            <!-- Results -->
+            <div id="transcriptionSection" class="hidden">
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-value" id="wordCount">-</div>
+                        <div>Words</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="charCount">-</div>
+                        <div>Characters</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="timeEst">-</div>
+                        <div>Est. Time</div>
+                    </div>
+                </div>
+                
+                <div class="result-box">
+                    <h3>📜 Full Transcription</h3>
+                    <textarea id="transcriptionText" rows="8" style="width:100%; padding:20px; border:none; border-radius:10px; font-size:16px; font-family:monospace; resize:vertical; background:rgba(255,255,255,0.7);"></textarea>
+                    <div style="margin-top:20px;">
+                        <button class="btn" onclick="downloadFile('transcription.txt')">⬇️ Download TXT</button>
+                        <button class="btn" onclick="copyText('transcriptionText')">📋 Copy Text</button>
+                        <button class="btn" onclick="speakText('transcriptionText')">🔊 Read Aloud</button>
+                    </div>
+                </div>
             </div>
             
-            <div id="summary" class="result-box" style="display: none;">
-                <h3>✍️ Smart Notes</h3>
-                <div id="summaryText"></div>
-                <button class="btn" onclick="download('notes.txt', summaryText.innerText)">⬇️ Download Notes</button>
-                <button class="btn" onclick="copyToClipboard(summaryText.innerText)">📋 Copy</button>
+            <div id="summarySection" class="result-box hidden">
+                <h3>✍️ Smart Notes Summary</h3>
+                <textarea id="summaryText" rows="6" style="width:100%; padding:20px; border:none; border-radius:10px; font-size:16px; font-family:-apple-system,sans-serif; resize:vertical; background:rgba(255,255,255,0.8);"></textarea>
+                <div style="margin-top:20px;">
+                    <button class="btn" onclick="downloadFile('notes.txt')">⬇️ Download Notes</button>
+                    <button class="btn" onclick="copyText('summaryText')">📋 Copy Notes</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Global state
-        let audioBuffer = null;
-        let transcription = '';
-        
-        // 🧠 Transformers.js setup
-        const { pipeline, env } = Transformers;
-        env.allowLocalModels = false;
-        env.allowRemoteModels = true;
-        
-        // FFmpeg setup
-        const { FFmpeg } = FFmpegWASM;
-        const ffmpeg = new FFmpeg();
-        
-        // UI Elements
+        // 🔥 FIXED UPLOAD + SPEECH-TO-TEXT
         const uploadArea = document.getElementById('uploadArea');
         const fileInfo = document.getElementById('fileInfo');
-        const controls = document.getElementById('controls');
-        const progressBar = document.getElementById('progressBar');
-        const status = document.getElementById('status');
-        const transcriptionDiv = document.getElementById('transcription');
-        const summaryDiv = document.getElementById('summary');
+        const progressSection = document.getElementById('progressSection');
+        const transcriptionSection = document.getElementById('transcriptionSection');
+        const summarySection = document.getElementById('summarySection');
         
-        // Drag & Drop
-        uploadArea.addEventListener('dragover', (e) => {
+        let transcriber = null;
+        let summarizer = null;
+        let currentFile = null;
+        
+        // Drag & Drop + Click Upload
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
             e.preventDefault();
-            uploadArea.classList.add('dragover');
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'), false);
         });
         
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'), false);
         });
         
-        uploadArea.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file) await processFile(file);
-        });
+        uploadArea.addEventListener('drop', handleDrop, false);
+        uploadArea.addEventListener('click', triggerFileSelect);
         
-        uploadArea.addEventListener('click', () => {
+        function triggerFileSelect() {
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = 'audio/*,video/mp4';
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file) processFile(file);
-            };
+            input.accept = 'audio/*,video/mp4,video/*';
+            input.onchange = e => handleFile(e.target.files[0]);
             input.click();
-        });
+        }
         
-        // Main processing
-        async function processFile(file) {
-            if (file.size > 50 * 1024 * 1024) {
-                showStatus('❌ File too large (max 50MB)', 'error');
+        async function handleDrop(e) {
+            const file = e.dataTransfer.files[0];
+            if (file) await handleFile(file);
+        }
+        
+        async function handleFile(file) {
+            if (!file || file.size > 30 * 1024 * 1024) {
+                showStatus('❌ File too large (max 30MB)', 'error');
                 return;
             }
             
-            // Show file info
+            currentFile = file;
             document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileSize').textContent = (file.size / 1024 / 1024).toFixed(1) + ' MB';
-            fileInfo.style.display = 'block';
-            controls.style.display = 'block';
+            document.getElementById('fileSize').textContent = (file.size/1024/1024).toFixed(1) + ' MB';
+            
+            fileInfo.classList.remove('hidden');
+            progressSection.classList.remove('hidden');
             uploadArea.style.display = 'none';
             
-            updateProgress(10, 'Loading FFmpeg...');
-            await ffmpeg.load();
-            
-            updateProgress(20, 'Converting to WAV...');
-            audioBuffer = await convertToWav(file);
-            
-            updateProgress(40, 'Loading AI model...');
-            const transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
-            
-            updateProgress(60, '🎙️ Transcribing...');
-            const result = await transcriber(audioBuffer, {
-                chunk_length_s: 30,
-                stride_length_s: 5,
-            });
-            transcription = result.text;
-            
-            // Show transcription
-            document.getElementById('transcriptionText').textContent = transcription;
-            transcriptionDiv.style.display = 'block';
-            updateProgress(90, '✅ Transcription complete!');
-            
-            // Generate summary if checked
-            if (document.getElementById('summarize').checked && transcription.length > 50) {
-                await generateSummary();
-            }
-            
-            updateProgress(100, '🎉 All done!');
+            await processAudio(file);
         }
         
-        // Convert any audio to WAV
-        async function convertToWav(file) {
-            const inputName = 'input.' + file.name.split('.').pop();
-            await ffmpeg.writeFile(inputName, new Uint8Array(await file.arrayBuffer()));
-            
-            await ffmpeg.exec(['-i', inputName, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', 'output.wav']);
-            const data = await ffmpeg.readFile('output.wav');
-            
-            // Cleanup
-            await ffmpeg.deleteFile(inputName);
-            await ffmpeg.deleteFile('output.wav');
-            
-            return data;
+        // 🎙️ MAIN PROCESSING
+        async function processAudio(file) {
+            try {
+                updateProgress(5, '🔄 Initializing AI...');
+                
+                // Load Whisper model
+                if (!transcriber) {
+                    updateProgress(15, '📥 Downloading Whisper model...');
+                    transcriber = await Transformers.pipeline(
+                        'automatic-speech-recognition', 
+                        'Xenova/whisper-tiny'
+                    );
+                }
+                
+                updateProgress(30, '🎵 Converting audio...');
+                
+                // Convert to 16kHz mono WAV
+                const audioBuffer = await file.arrayBuffer();
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                const audioBufferDecoded = await audioContext.decodeAudioData(audioBuffer);
+                
+                // Convert to mono 16kHz
+                const channelData = [];
+                const samples = Math.floor(audioBufferDecoded.length * 16000 / audioBufferDecoded.sampleRate);
+                for (let ch = 0; ch < audioBufferDecoded.numberOfChannels; ch++) {
+                    const channel = audioBufferDecoded.getChannelData(ch);
+                    for (let i = 0; i < samples; i++) {
+                        channelData[i] = channelData[i] || 0 + channel[i * channel.length / samples] || 0;
+                    }
+                }
+                
+                // Convert to 16-bit PCM
+                const pcmData = new Int16Array(samples);
+                for (let i = 0; i < samples; i++) {
+                    pcmData[i] = Math.max(-1, Math.min(1, channelData[i])) * 32767;
+                }
+                
+                updateProgress(50, '🧠 Transcribing speech...');
+                
+                // Transcribe
+                const result = await transcriber(pcmData, {
+                    sampling_rate: 16000,
+                    return_timestamps: false
+                });
+                
+                const transcription = result.text.trim();
+                document.getElementById('transcriptionText').value = transcription;
+                
+                // Update metrics
+                const words = transcription.split(/\s+/).length;
+                const chars = transcription.length;
+                document.getElementById('wordCount').textContent = words;
+                document.getElementById('charCount').textContent = chars;
+                document.getElementById('timeEst').textContent = (words/20).toFixed(0) + 's';
+                
+                transcriptionSection.classList.remove('hidden');
+                updateProgress(85, `✅ ${words} words transcribed!`);
+                
+                // Generate summary
+                if (document.getElementById('makeSummary').checked && words > 10) {
+                    await generateSummary(transcription);
+                }
+                
+                updateProgress(100, '🎉 Complete!');
+                showStatus('✅ Processing finished!', 'success');
+                
+            } catch (error) {
+                console.error(error);
+                showStatus(`❌ Error: ${error.message}`, 'error');
+                updateProgress(0, 'Failed');
+            }
         }
         
-        // Generate summary
-        async function generateSummary() {
-            updateProgress(95, '✍️ Generating notes...');
-            
-            const summarizer = await pipeline('summarization', 'Xenova/distilbart-cnn-12-6');
-            
-            // Chunk if too long
-            const chunks = transcription.match(/.{1,900}/g) || [transcription];
-            let summary = '';
-            
-            for (let chunk of chunks) {
-                const result = await summarizer(chunk, { max_new_tokens: 120 });
-                summary += result[0].summary_text + ' ';
+        async function generateSummary(text) {
+            try {
+                updateProgress(90, '✍️ Creating smart notes...');
+                
+                if (!summarizer) {
+                    summarizer = await Transformers.pipeline(
+                        'summarization', 
+                        'Xenova/distilbart-cnn-6-6'
+                    );
+                }
+                
+                // Chunk text
+                const chunks = text.match(/[^.!?]+[.!?]+/g) || [text];
+                let summary = '';
+                
+                for (let i = 0; i < Math.min(3, chunks.length); i++) {
+                    const chunk = chunks[i];
+                    if (chunk.length > 50) {
+                        const result = await summarizer(chunk, {
+                            max_new_tokens: 80,
+                            min_length: 10
+                        });
+                        summary += result[0].summary_text + ' ';
+                    }
+                }
+                
+                document.getElementById('summaryText').value = summary.trim();
+                summarySection.classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Summary error:', error);
             }
-            
-            document.getElementById('summaryText').textContent = summary.trim();
-            summaryDiv.style.display = 'block';
         }
         
         // UI Helpers
         function updateProgress(percent, message) {
-            progressBar.style.width = percent + '%';
-            status.textContent = message;
-            status.className = 'status info';
+            document.getElementById('progressBar').style.width = percent + '%';
+            document.getElementById('statusMsg').textContent = message;
         }
         
         function showStatus(message, type) {
-            status.textContent = message;
-            status.className = `status ${type}`;
+            const statusEl = document.getElementById('statusMsg');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
         }
         
-        function download(filename, text) {
-            const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-            element.setAttribute('download', filename);
-            element.style.display = 'none';
-            document.body.appendChild(element);
-            element.click();
-            document.body.removeChild(element);
+        // Downloads & Copy
+        function downloadFile(filename) {
+            const text = filename.includes('transcription') 
+                ? document.getElementById('transcriptionText').value 
+                : document.getElementById('summaryText').value;
+            
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
         
-        function copyToClipboard(text) {
+        function copyText(elementId) {
+            const text = document.getElementById(elementId).value;
             navigator.clipboard.writeText(text).then(() => {
                 showStatus('✅ Copied to clipboard!', 'success');
             });
+        }
+        
+        function speakText(elementId) {
+            const utterance = new SpeechSynthesisUtterance(document.getElementById(elementId).value);
+            utterance.rate = 0.9;
+            speechSynthesis.speak(utterance);
         }
     </script>
 </body>
